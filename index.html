@@ -1,0 +1,1480 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>휘매쓰 연산 챌린지!</title>
+  <!-- MathJax 라이브러리 로드 -->
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" defer></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0; padding: 0;
+      background: #f2f2f2;
+    }
+    h1, h2 {
+      text-align: center;
+    }
+    #gameContainer {
+      max-width: 650px;
+      margin: 20px auto;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      padding: 20px;
+      display: none;
+    }
+    #difficultyContainer {
+      max-width: 650px;
+      margin: 40px auto;
+      text-align: center;
+    }
+    button {
+      margin: 5px;
+      padding: 10px 20px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    .scoreboard {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .energy-bar {
+      width: 100%;
+      height: 10px;
+      background: #ccc;
+      border-radius: 5px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+    .energy-fill {
+      height: 100%;
+      width: 100%;
+      background: linear-gradient(to right, #4CAF50, #ffeb3b, #f44336);
+      transition: width 0.2s linear;
+    }
+    .question-block {
+      margin-top: 20px;
+    }
+    .choices {
+      margin-top: 15px;
+    }
+    .choice-btn {
+      display: block;
+      margin: 8px auto;
+      padding: 8px 12px;
+      width: 80%;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: #eee;
+      cursor: pointer;
+      font-size: 1rem;
+      text-align: left;
+    }
+    #timeDisplay {
+      margin-right: 10px;
+    }
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<h1>휘매쓰 연산 챌린지!</h1>
+
+<div id="difficultyContainer">
+  <h2>난이도를 선택하세요</h2>
+  <button onclick="startGame('top')">최상(20초, +20점)</button>
+  <button onclick="startGame('high')">상(30초, +15점)</button>
+  <button onclick="startGame('mid')">중(40초, +13점)</button>
+  <button onclick="startGame('low')">하(시간 제한 없음, +10점)</button>
+</div>
+
+<div id="gameContainer">
+  <div class="scoreboard">
+    <div id="scoreDisplay">점수: 0</div>
+    <div id="livesDisplay">남은 기회: 3</div>
+    <div id="timeDisplay">총 경과: 0초</div>
+  </div>
+  <div class="energy-bar" id="energyBar">
+    <div class="energy-fill" id="energyFill"></div>
+  </div>
+  
+  <div id="questionContainer"><!-- 문제와 보기 버튼이 동적으로 표시됨 --></div>
+</div>
+
+<script>
+/* 난이도별 시간 및 점수 설정 */
+const timeLimitConfig = {
+  top: 20,   // 최상
+  high: 30,  // 상
+  mid: 40,   // 중
+  low: null  // 하: 제한 없음
+};
+const scoreConfig = {
+  top: 20,
+  high: 15,
+  mid: 13,
+  low: 10
+};
+
+/* 
+   17~125 모든 문제를 하나도 빠짐없이 포함하는 
+   방대한 문제 배열입니다.
+   - questionLatex: LaTeX 수식
+   - choicesLatex: 길이 4 배열 (0번이 정답, 1~3번이 오답)
+   - correctIndex: 0
+   실제 표시 시 shuffleArray를 통해 보기가 무작위로 정렬되므로
+   화면에선 정답이 매번 다른 위치에 표시됩니다.
+*/
+const quizData = [
+  /* 17 */
+  {
+    questionLatex: "8x \\times (-3)",
+    choicesLatex: [
+      "-24x",    // correct
+      "24x",
+      "-8x",
+      "-24"
+    ],
+    correctIndex: 0
+  },
+  /* 18 */
+  {
+    questionLatex: "-9 \\times (-2y)",
+    choicesLatex: [
+      "18y",   // correct
+      "-18y",
+      "9y",
+      "0"
+    ],
+    correctIndex: 0
+  },
+  /* 19 */
+  {
+    questionLatex: "(-4a) \\times 7",
+    choicesLatex: [
+      "-28a",   // correct
+      "28a",
+      "-11a",
+      "-4a"
+    ],
+    correctIndex: 0
+  },
+  /* 20 */
+  {
+    questionLatex: "(-4x) \\times \\dfrac{1}{2}",
+    choicesLatex: [
+      "-2x",   // correct
+      "2x",
+      "-4x",
+      "-\\dfrac{1}{2}x"
+    ],
+    correctIndex: 0
+  },
+  /* 21 */
+  {
+    questionLatex: "\\dfrac{3}{5} \\times (-15y)",
+    choicesLatex: [
+      "-9y",   // correct
+      "9y",
+      "-3y",
+      "-45y"
+    ],
+    correctIndex: 0
+  },
+  /* 22 */
+  {
+    questionLatex: "12x \\times \\dfrac{5}{2}",
+    choicesLatex: [
+      "30x",
+      "-30x",
+      "60x",
+      "6x"
+    ],
+    correctIndex: 0
+  },
+  /* 23 */
+  {
+    questionLatex: "-\\dfrac{1}{7} \\times 14y",
+    choicesLatex: [
+      "-2y",   // correct
+      "2y",
+      "-14y",
+      "-\\dfrac{1}{2}y"
+    ],
+    correctIndex: 0
+  },
+  /* 24 */
+  {
+    questionLatex: "0.2 \\times (-5a)",
+    choicesLatex: [
+      "-a",    // correct
+      "a",
+      "-5a",
+      "-0.2a"
+    ],
+    correctIndex: 0
+  },
+  /* 25 */
+  {
+    questionLatex: "(-2.5a) \\times (-2)",
+    choicesLatex: [
+      "5a",    // correct
+      "-5a",
+      "-2.5a",
+      "2a"
+    ],
+    correctIndex: 0
+  },
+  /* 26 */
+  {
+    questionLatex: "(-5x) \\times 4",
+    choicesLatex: [
+      "-20x",  // correct
+      "20x",
+      "-5x",
+      "-4x"
+    ],
+    correctIndex: 0
+  },
+  /* 27 */
+  {
+    questionLatex: "-5(2x - 1)",
+    choicesLatex: [
+      "-10x + 5", // correct
+      "-10x - 5",
+      "10x + 5",
+      "-5x + 10"
+    ],
+    correctIndex: 0
+  },
+  /* 28 */
+  {
+    questionLatex: "6y \\times (-2)",
+    choicesLatex: [
+      "-12y",  // correct
+      "12y",
+      "-6y",
+      "-2y"
+    ],
+    correctIndex: 0
+  },
+  /* 29 */
+  {
+    questionLatex: "(-3x) \\times 5",
+    choicesLatex: [
+      "-15x",  // correct
+      "15x",
+      "-3x",
+      "-8x"
+    ],
+    correctIndex: 0
+  },
+  /* 30 */
+  {
+    questionLatex: "4x \\times (-3)",
+    choicesLatex: [
+      "-12x",  // correct
+      "12x",
+      "-4x",
+      "-1.2x"
+    ],
+    correctIndex: 0
+  },
+  /* 31 */
+  {
+    questionLatex: "-4 \\times (-y)",
+    choicesLatex: [
+      "4y",    // correct
+      "-4y",
+      "-y",
+      "0"
+    ],
+    correctIndex: 0
+  },
+  /* 32 */
+  {
+    questionLatex: "(-4 + x) \\times (-5)",
+    choicesLatex: [
+      "20 - 5x", // correct
+      "-20 - 5x",
+      "20 + 5x",
+      "-5x - 4"
+    ],
+    correctIndex: 0
+  },
+  /* 33 */
+  {
+    questionLatex: "\\dfrac{5}{3}(3 - 6y)",
+    choicesLatex: [
+      "5 - 10y", // correct
+      "-5 + 10y",
+      "5 + 10y",
+      "-5 - 10y"
+    ],
+    correctIndex: 0
+  },
+  /* 34 */
+  {
+    questionLatex: "\\dfrac{1}{2}(-2x + 4)",
+    choicesLatex: [
+      "-x + 2",  // correct
+      "x + 2",
+      "-2x + 4",
+      "-x - 2"
+    ],
+    correctIndex: 0
+  },
+  /* 35 */
+  {
+    questionLatex: "(16x + 8) \\times \\Bigl(-\\dfrac{1}{4}\\Bigr)",
+    choicesLatex: [
+      "-4x - 2", // correct
+      "-4x + 2",
+      "4x - 2",
+      "-16x - 8"
+    ],
+    correctIndex: 0
+  },
+  /* 36 */
+  {
+    questionLatex: "2\\Bigl(\\dfrac{1}{2} - 3x\\Bigr)",
+    choicesLatex: [
+      "1 - 6x",  // correct
+      "-1 - 6x",
+      "1 + 6x",
+      "-6x"
+    ],
+    correctIndex: 0
+  },
+  /* 37 */
+  {
+    questionLatex: "0.2(5 + 10y)",
+    choicesLatex: [
+      "1 + 2y",  // correct
+      "-1 + 2y",
+      "1 - 2y",
+      "2y"
+    ],
+    correctIndex: 0
+  },
+  /* 38 */
+  {
+    questionLatex: "-5\\Bigl(4x - \\dfrac{2}{5}\\Bigr)",
+    choicesLatex: [
+      "-20x + 2", // correct
+      "-20x - 2",
+      "-2x + 20",
+      "-20x + \\dfrac{2}{5}"
+    ],
+    correctIndex: 0
+  },
+  /* 39 */
+  {
+    questionLatex: "3(-2x - 3)",
+    choicesLatex: [
+      "-6x - 9",  // correct
+      "-6x + 9",
+      "6x - 9",
+      "-3x - 9"
+    ],
+    correctIndex: 0
+  },
+  /* 40 */
+  {
+    questionLatex: "3(2a - 4)",
+    choicesLatex: [
+      "6a - 12", // correct
+      "-6a - 12",
+      "6a + 12",
+      "-12a - 6"
+    ],
+    correctIndex: 0
+  },
+  /* 41 */
+  {
+    questionLatex: "4(-3x - 5)",
+    choicesLatex: [
+      "-12x - 20", // correct
+      "12x - 20",
+      "-12x + 20",
+      "-3x - 5"
+    ],
+    correctIndex: 0
+  },
+  /* 42 */
+  {
+    questionLatex: "-2(3x - 1)",
+    choicesLatex: [
+      "-6x + 2", // correct
+      "-6x - 2",
+      "6x + 2",
+      "-2x + 6"
+    ],
+    correctIndex: 0
+  },
+  /* 43 */
+  {
+    questionLatex: "(a - 2)(-1)",
+    choicesLatex: [
+      "-a + 2", // correct
+      "a - 2",
+      "-a - 2",
+      "a + 2"
+    ],
+    correctIndex: 0
+  },
+  /* 44 */
+  {
+    questionLatex: "(-6x) \\times \\Bigl(-\\dfrac{7}{3}\\Bigr)",
+    choicesLatex: [
+      "14x",  // correct
+      "-14x",
+      "42x",
+      "\\dfrac{7}{3}x"
+    ],
+    correctIndex: 0
+  },
+  /* 45 */
+  {
+    questionLatex: "2x \\times \\Bigl(-\\dfrac{3}{2}\\Bigr)",
+    choicesLatex: [
+      "-3x", // correct
+      "3x",
+      "-\\dfrac{1}{2}x",
+      "-6x"
+    ],
+    correctIndex: 0
+  },
+  /* 46 */
+  {
+    questionLatex: "-7\\Bigl(2x - \\dfrac{3}{7}\\Bigr)",
+    choicesLatex: [
+      "-14x + 3", // correct
+      "-14x - 3",
+      "14x - 3",
+      "-7x + \\dfrac{3}{7}"
+    ],
+    correctIndex: 0
+  },
+  /* 47 */
+  {
+    questionLatex: "(-3 + 2x)(-4)",
+    choicesLatex: [
+      "12 - 8x", // correct
+      "-12 - 8x",
+      "12 + 8x",
+      "-8x + 4"
+    ],
+    correctIndex: 0
+  },
+  /* 48 */
+  {
+    questionLatex: "12x \\div (-4)",
+    choicesLatex: [
+      "-3x", // correct
+      "3x",
+      "-12x",
+      "-4x"
+    ],
+    correctIndex: 0
+  },
+  /* 49 */
+  {
+    questionLatex: "14b \\div \\dfrac{7}{5}",
+    choicesLatex: [
+      "10b", // correct
+      "-10b",
+      "14b",
+      "2b"
+    ],
+    correctIndex: 0
+  },
+  /* 50 */
+  {
+    questionLatex: "\\Bigl(-\\dfrac{2}{5}a\\Bigr) \\div \\Bigl(-\\dfrac{2}{15}\\Bigr)",
+    choicesLatex: [
+      "3a",  // correct
+      "-3a",
+      "\\dfrac{2}{5}a",
+      "-15a"
+    ],
+    correctIndex: 0
+  },
+  /* 51 */
+  {
+    questionLatex: "9x \\div \\dfrac{1}{3}",
+    choicesLatex: [
+      "27x", // correct
+      "-27x",
+      "3x",
+      "\\dfrac{9}{3}x"
+    ],
+    correctIndex: 0
+  },
+  /* 52 */
+  {
+    questionLatex: "\\dfrac{3}{12}a \\div (-3)",
+    choicesLatex: [
+      "-\\dfrac{1}{12}a", // correct
+      "\\dfrac{1}{12}a",
+      "-\\dfrac{1}{36}a",
+      "-\\dfrac{3}{12}a"
+    ],
+    correctIndex: 0
+  },
+  /* 53 */
+  {
+    questionLatex: "\\Bigl(-\\dfrac{3}{4}a\\Bigr) \\div \\Bigl(-\\dfrac{3}{2}\\Bigr)",
+    choicesLatex: [
+      "\\dfrac{1}{2}a",  // correct
+      "\\dfrac{3}{4}a",
+      "-\\dfrac{1}{2}a",
+      "\\dfrac{2}{3}a"
+    ],
+    correctIndex: 0
+  },
+  /* 54 */
+  {
+    questionLatex: "\\dfrac{2}{5}a \\div \\Bigl(-\\dfrac{1}{10}\\Bigr)",
+    choicesLatex: [
+      "-4a", // correct
+      "4a",
+      "-\\dfrac{2}{5}a",
+      "-2a"
+    ],
+    correctIndex: 0
+  },
+  /* 55 */
+  {
+    questionLatex: "(-8y) \\div \\Bigl(-\\dfrac{1}{2}\\Bigr)",
+    choicesLatex: [
+      "16y", // correct
+      "-16y",
+      "8y",
+      "-4y"
+    ],
+    correctIndex: 0
+  },
+  /* 56 */
+  {
+    questionLatex: "(-18y) \\div 3",
+    choicesLatex: [
+      "-6y", // correct
+      "6y",
+      "-18y",
+      "-3y"
+    ],
+    correctIndex: 0
+  },
+  /* 57 */
+  {
+    questionLatex: "(-15x) \\div (-5)",
+    choicesLatex: [
+      "3x", // correct
+      "-3x",
+      "15x",
+      "-15x"
+    ],
+    correctIndex: 0
+  },
+  /* 58 */
+  {
+    questionLatex: "\\dfrac{1}{4}x \\div \\Bigl(-\\dfrac{3}{8}\\Bigr)",
+    choicesLatex: [
+      "-\\dfrac{2}{3}x", // correct
+      "\\dfrac{2}{3}x",
+      "-\\dfrac{8}{3}x",
+      "-\\dfrac{1}{2}x"
+    ],
+    correctIndex: 0
+  },
+  /* 59 */
+  {
+    questionLatex: "18x \\div (-6)",
+    choicesLatex: [
+      "-3x", // correct
+      "3x",
+      "-18x",
+      "-6x"
+    ],
+    correctIndex: 0
+  },
+  /* 60 */
+  {
+    questionLatex: "(-6y) \\div 3",
+    choicesLatex: [
+      "-2y", // correct
+      "2y",
+      "-3y",
+      "-6y"
+    ],
+    correctIndex: 0
+  },
+  /* 61 */
+  {
+    questionLatex: "(-9a) \\div 3",
+    choicesLatex: [
+      "-3a", // correct
+      "3a",
+      "-9a",
+      "-1a"
+    ],
+    correctIndex: 0
+  },
+  /* 62 */
+  {
+    questionLatex: "(-8b) \\div (-2)",
+    choicesLatex: [
+      "4b", // correct
+      "-4b",
+      "-8b",
+      "2b"
+    ],
+    correctIndex: 0
+  },
+  /* 63 */
+  {
+    questionLatex: "(8x - 24) \\div 8",
+    choicesLatex: [
+      "x - 3", // correct
+      "x + 3",
+      "8x - 24",
+      "-x + 3"
+    ],
+    correctIndex: 0
+  },
+  /* 64 */
+  {
+    questionLatex: "(-8x + 12) \\div 4",
+    choicesLatex: [
+      "-2x + 3", // correct
+      "-8x + 12",
+      "-2x - 3",
+      "2x - 3"
+    ],
+    correctIndex: 0
+  },
+  /* 65 */
+  {
+    questionLatex: "(9x - 12) \\div \\Bigl(-\\dfrac{3}{2}\\Bigr)",
+    choicesLatex: [
+      "-6x + 8", // correct
+      "6x + 8",
+      "-3x + 8",
+      "-6x - 8"
+    ],
+    correctIndex: 0
+  },
+  /* 66 */
+  {
+    questionLatex: "(4x + 12) \\div (-4)",
+    choicesLatex: [
+      "-x - 3", // correct
+      "x + 3",
+      "-4x - 12",
+      "-x + 3"
+    ],
+    correctIndex: 0
+  },
+  /* 67 */
+  {
+    questionLatex: "(12x - 6) \\div (-6)",
+    choicesLatex: [
+      "-2x + 1", // correct
+      "2x - 1",
+      "-2x - 1",
+      "-12x + 6"
+    ],
+    correctIndex: 0
+  },
+  /* 68 */
+  {
+    questionLatex: "(8x - 12) \\div (-4)",
+    choicesLatex: [
+      "-2x + 3", // correct
+      "2x - 3",
+      "-8x + 12",
+      "-2x - 3"
+    ],
+    correctIndex: 0
+  },
+  /* 69 */
+  {
+    questionLatex: "(-5x - 20) \\div 5",
+    choicesLatex: [
+      "-x - 4", // correct
+      "x - 4",
+      "-5x - 4",
+      "-x + 4"
+    ],
+    correctIndex: 0
+  },
+  /* 70 */
+  {
+    questionLatex: "(5x - 15) \\div \\Bigl(-\\dfrac{5}{2}\\Bigr)",
+    choicesLatex: [
+      "-2x + 6", // correct
+      "2x + 6",
+      "-2x - 6",
+      "-10x + 6"
+    ],
+    correctIndex: 0
+  },
+  /* 71 */
+  {
+    questionLatex: "\\Bigl(\\dfrac{3}{2}a - 6\\Bigr) \\div 3",
+    choicesLatex: [
+      "\\dfrac{1}{2}a - 2", // correct
+      "\\dfrac{3}{2}a - 2",
+      "\\dfrac{1}{2}a + 2",
+      "1.5a - 6"
+    ],
+    correctIndex: 0
+  },
+  /* 72 */
+  {
+    questionLatex: "(-4x - \\dfrac{5}{6}) \\div \\dfrac{10}{3}",
+    choicesLatex: [
+      "-\\dfrac{6}{5}x - \\dfrac{1}{4}", // correct
+      "\\dfrac{6}{5}x - \\dfrac{1}{4}",
+      "-\\dfrac{6}{5}x + \\dfrac{1}{4}",
+      "-6x - \\dfrac{1}{4}"
+    ],
+    correctIndex: 0
+  },
+  /* 73 */
+  {
+    questionLatex: "(0.2x - 0.5) \\div \\dfrac{1}{10}",
+    choicesLatex: [
+      "2x - 5",  // correct
+      "2x + 5",
+      "(-5x + 2)",
+      "(-2x - 5)"
+    ],
+    correctIndex: 0
+  },
+  /* 74 */
+  {
+    questionLatex: "-\\dfrac{1}{2}(4x + 12) \\div 3",
+    choicesLatex: [
+      "-\\dfrac{2}{3}x - 2", // correct
+      "-2x - 6",
+      "\\dfrac{2}{3}x - 2",
+      "-\\dfrac{2}{3}x + 2"
+    ],
+    correctIndex: 0
+  },
+  /* 75 */
+  {
+    questionLatex: "(6y - 9) \\times 4 \\div 3",
+    choicesLatex: [
+      "8y - 12", // correct
+      "-8y - 12",
+      "8y + 12",
+      "6y - 9"
+    ],
+    correctIndex: 0
+  },
+  /* 76 */
+  {
+    questionLatex: "-5(y - 1) \\div \\dfrac{1}{2}",
+    choicesLatex: [
+      "-10y + 10", // correct
+      "-10y - 10",
+      "-5y + 10",
+      "-5y - 5"
+    ],
+    correctIndex: 0
+  },
+  /* 77 */
+  {
+    questionLatex: "(2y + 3) \\div \\dfrac{2}{3} \\times 4",
+    choicesLatex: [
+      "12y + 18", // correct
+      "-12y + 18",
+      "12y - 18",
+      "6y + 9"
+    ],
+    correctIndex: 0
+  },
+  /* 78 */
+  {
+    questionLatex: "4x + 8x",
+    choicesLatex: [
+      "12x", // correct
+      "-12x",
+      "4x",
+      "8x"
+    ],
+    correctIndex: 0
+  },
+  /* 79 */
+  {
+    questionLatex: "9a + 8a",
+    choicesLatex: [
+      "17a", // correct
+      "-17a",
+      "1a",
+      "72a"
+    ],
+    correctIndex: 0
+  },
+  /* 80 */
+  {
+    questionLatex: "\\dfrac{4}{3}a - \\dfrac{5}{4}a",
+    choicesLatex: [
+      "\\dfrac{1}{12}a", // correct
+      "\\dfrac{1}{4}a",
+      "\\dfrac{1}{3}a",
+      "-\\dfrac{1}{12}a"
+    ],
+    correctIndex: 0
+  },
+  /* 81 */
+  {
+    questionLatex: "7y - 3y",
+    choicesLatex: [
+      "4y", // correct
+      "-4y",
+      "10y",
+      "1y"
+    ],
+    correctIndex: 0
+  },
+  /* 82 */
+  {
+    questionLatex: "\\dfrac{2}{3}y - \\dfrac{1}{2}y",
+    choicesLatex: [
+      "\\dfrac{1}{6}y", // correct
+      "-\\dfrac{1}{6}y",
+      "\\dfrac{5}{6}y",
+      "\\dfrac{1}{3}y"
+    ],
+    correctIndex: 0
+  },
+  /* 83 */
+  {
+    questionLatex: "-4x + 2x + 5x",
+    choicesLatex: [
+      "3x",  // correct
+      "-3x",
+      "1x",
+      "11x"
+    ],
+    correctIndex: 0
+  },
+  /* 84 */
+  {
+    questionLatex: "-a - 2a - 3a",
+    choicesLatex: [
+      "-6a", // correct
+      "6a",
+      "-5a",
+      "-1a"
+    ],
+    correctIndex: 0
+  },
+  /* 85 */
+  {
+    questionLatex: "4x - 11x + 9x",
+    choicesLatex: [
+      "2x", // correct
+      "-2x",
+      "4x",
+      "-16x"
+    ],
+    correctIndex: 0
+  },
+  /* 86 */
+  {
+    questionLatex: "-6y + 2y - 3y",
+    choicesLatex: [
+      "-7y", // correct
+      "7y",
+      "-1y",
+      "-9y"
+    ],
+    correctIndex: 0
+  },
+  /* 87 */
+  {
+    questionLatex: "5a - (-7a) + 3a",
+    choicesLatex: [
+      "15a", // correct
+      "-15a",
+      "5a",
+      "1a"
+    ],
+    correctIndex: 0
+  },
+  /* 89 */
+  {
+    questionLatex: "(2x + 3) - (3x - 8)",
+    choicesLatex: [
+      "-x + 11", // correct
+      "-11x + 1",
+      "x + 11",
+      "-5x + 11"
+    ],
+    correctIndex: 0
+  },
+  /* 90 */
+  {
+    questionLatex: "-3(-2a + 1) - 5(3a - 2)",
+    choicesLatex: [
+      "-9a + 7", // correct
+      "9a + 7",
+      "-9a - 7",
+      "-15a + 3"
+    ],
+    correctIndex: 0
+  },
+  /* 91 */
+  {
+    questionLatex: "-2(4x + 5) - 6(x - 2)",
+    choicesLatex: [
+      "-14x + 2", // correct
+      "14x + 2",
+      "-2x - 14",
+      "-14x - 2"
+    ],
+    correctIndex: 0
+  },
+  /* 92 */
+  {
+    questionLatex: "5a + 7 + 4a + 8",
+    choicesLatex: [
+      "9a + 15", // correct
+      "-9a + 15",
+      "9a - 15",
+      "15a + 9"
+    ],
+    correctIndex: 0
+  },
+  /* 93 */
+  {
+    questionLatex: "4x - 2 - 3 - 5x",
+    choicesLatex: [
+      "-x - 5", // correct
+      "x + 5",
+      "-x + 5",
+      "-9x - 5"
+    ],
+    correctIndex: 0
+  },
+  /* 94 */
+  {
+    questionLatex: "-5 + 6b - 7 - 10b",
+    choicesLatex: [
+      "-4b - 12", // correct
+      "4b + 12",
+      "-4b + 12",
+      "-16b - 2"
+    ],
+    correctIndex: 0
+  },
+  /* 95 */
+  {
+    questionLatex: "-5y + 16 - 11y - 20",
+    choicesLatex: [
+      "-16y - 4", // correct
+      "-16y + 4",
+      "16y - 4",
+      "-4y - 16"
+    ],
+    correctIndex: 0
+  },
+  /* 96 */
+  {
+    questionLatex: "-(5a - 1) - 2(a - 2)",
+    choicesLatex: [
+      "-7a + 5", // correct
+      "-7a - 5",
+      "-5a + 7",
+      "-9a + 5"
+    ],
+    correctIndex: 0
+  },
+  /* 97 */
+  {
+    questionLatex: "2(-3x + 4) - 3(-4x + 1)",
+    choicesLatex: [
+      "6x + 5", // correct
+      "-18x + 11",
+      "6x - 5",
+      "-6x + 5"
+    ],
+    correctIndex: 0
+  },
+  /* 98 */
+  {
+    questionLatex: "-(x - 6) - 3(2x + 1)",
+    choicesLatex: [
+      "-7x + 3", // correct
+      "-7x - 3",
+      "-x - 3",
+      "7x + 3"
+    ],
+    correctIndex: 0
+  },
+  /* 99 */
+  {
+    questionLatex: "4(-3x + 1) - (3x - 2)",
+    choicesLatex: [
+      "-15x + 6", // correct
+      "-12x + 2",
+      "-15x - 6",
+      "-9x + 6"
+    ],
+    correctIndex: 0
+  },
+  /* 100 */
+  {
+    questionLatex: "-(3x + 2) - (-4x + 5)",
+    choicesLatex: [
+      "x - 7", // correct
+      "-x - 7",
+      "x + 7",
+      "-7x + 1"
+    ],
+    correctIndex: 0
+  },
+  /* 101 */
+  {
+    questionLatex: "3(-2a + 1) - 4(-3a - 2)",
+    choicesLatex: [
+      "6a + 11", // correct
+      "-6a + 11",
+      "12a + 8",
+      "-6a - 11"
+    ],
+    correctIndex: 0
+  },
+  /* 102 */
+  {
+    questionLatex: "a - (a + 2) + 3(a - 1)",
+    choicesLatex: [
+      "3a - 5", // correct
+      "-3a + 5",
+      "3a + 5",
+      "a - 5"
+    ],
+    correctIndex: 0
+  },
+  /* 103 */
+  {
+    questionLatex: "3(x + 1) + (2x - 1) - 4(x - 3)",
+    choicesLatex: [
+      "x + 14", // correct
+      "-x + 14",
+      "x - 14",
+      "14x + 1"
+    ],
+    correctIndex: 0
+  },
+  /* 104 */
+  {
+    questionLatex: "3(a + 1) - 2(a - 3) - 3(a + 5)",
+    choicesLatex: [
+      "-2a - 6", // correct
+      "-2a + 6",
+      "-8a - 6",
+      "2a - 6"
+    ],
+    correctIndex: 0
+  },
+  /* 105 */
+  {
+    questionLatex: "(-2y + 1) + (-y + 3)",
+    choicesLatex: [
+      "-3y + 4", // correct
+      "-3y - 4",
+      "-2y + 1",
+      "-y + 2"
+    ],
+    correctIndex: 0
+  },
+  /* 106 */
+  {
+    questionLatex: "(7b - 3) + (-5b + 9)",
+    choicesLatex: [
+      "2b + 6", // correct
+      "-2b + 6",
+      "12b + 6",
+      "2b - 3"
+    ],
+    correctIndex: 0
+  },
+  /* 107 */
+  {
+    questionLatex: "(-2x + 5) + (8x - 3)",
+    choicesLatex: [
+      "6x + 2", // correct
+      "-6x + 2",
+      "6x - 2",
+      "8x + 2"
+    ],
+    correctIndex: 0
+  },
+  /* 108 */
+  {
+    questionLatex: "-3(x - 1) + 2(2 - x)",
+    choicesLatex: [
+      "-5x + 7", // correct
+      "-5x - 7",
+      "5x + 7",
+      "-3x + 7"
+    ],
+    correctIndex: 0
+  },
+  /* 109 */
+  {
+    questionLatex: "-2x + 9 - 5(3 - 4x) - 7",
+    choicesLatex: [
+      "18x - 13", // correct
+      "-18x - 13",
+      "18x + 13",
+      "2x - 13"
+    ],
+    correctIndex: 0
+  },
+  /* 110 */
+  {
+    questionLatex: "11x - (3x + 7)",
+    choicesLatex: [
+      "8x - 7", // correct
+      "-8x - 7",
+      "8x + 7",
+      "4x - 7"
+    ],
+    correctIndex: 0
+  },
+  /* 111 */
+  {
+    questionLatex: "(2x - 3) - (5x - 7)",
+    choicesLatex: [
+      "-3x + 4", // correct
+      "3x + 4",
+      "-3x - 4",
+      "-7x + 4"
+    ],
+    correctIndex: 0
+  },
+  /* 112 */
+  {
+    questionLatex: "2(5x + 1) - 3(x - 3)",
+    choicesLatex: [
+      "7x + 11", // correct
+      "-7x + 11",
+      "13x + 11",
+      "7x - 11"
+    ],
+    correctIndex: 0
+  },
+  /* 113 */
+  {
+    questionLatex: "3(2x - 1) + (5x + 1)",
+    choicesLatex: [
+      "11x - 2", // correct
+      "-11x + 2",
+      "11x + 2",
+      "6x + 5"
+    ],
+    correctIndex: 0
+  },
+  /* 114 */
+  {
+    questionLatex: "(-3x + 5) - (4x - 1)",
+    choicesLatex: [
+      "-7x + 6", // correct
+      "-7x - 6",
+      "7x - 6",
+      "-3x - 4x + 5 + 1"  // 장난스런 보기
+    ],
+    correctIndex: 0
+  },
+  /* 115 */
+  {
+    questionLatex: "(-9a - 3) - (-5a - 2)",
+    choicesLatex: [
+      "-4a - 1", // correct
+      "-4a + 1",
+      "-14a - 1",
+      "-9a - 3"
+    ],
+    correctIndex: 0
+  },
+  /* 116 */
+  {
+    questionLatex: "(5a - 3) - 2(7a - 6)",
+    choicesLatex: [
+      "-9a + 9", // correct
+      "-9a - 9",
+      "-19a + 9",
+      "9a + 9"
+    ],
+    correctIndex: 0
+  },
+  /* 117 */
+  {
+    questionLatex: "-7(x - 1) + 2(4x + 3)",
+    choicesLatex: [
+      "x + 13",  // correct
+      "-x + 13",
+      "x - 13",
+      "13x + 1"
+    ],
+    correctIndex: 0
+  },
+  /* 118 */
+  {
+    questionLatex: "-(-5x + 8) + 3(3 - x)",
+    choicesLatex: [
+      "2x + 1", // correct
+      "-2x + 1",
+      "5x + 1",
+      "2x - 1"
+    ],
+    correctIndex: 0
+  },
+  /* 119 */
+  {
+    questionLatex: "(3x + 9) + 2(5x - 2)",
+    choicesLatex: [
+      "13x + 5", // correct
+      "-13x + 5",
+      "13x - 5",
+      "3x + 9"
+    ],
+    correctIndex: 0
+  },
+  /* 120 */
+  {
+    questionLatex: "3(-3x + 8) + (9x + 7)",
+    choicesLatex: [
+      "31", // correct
+      "-31",
+      "31x",
+      "1"
+    ],
+    correctIndex: 0
+  },
+  /* 121 */
+  {
+    questionLatex: "2(2x - 3) + 3(5x - 4)",
+    choicesLatex: [
+      "19x - 18", // correct
+      "-19x - 18",
+      "19x + 18",
+      "11x - 6"
+    ],
+    correctIndex: 0
+  },
+  /* 122 */
+  {
+    questionLatex: "4(2x + 5) + 3(5x - 3)",
+    choicesLatex: [
+      "23x + 11", // correct
+      "-23x + 11",
+      "23x - 11",
+      "8x + 15x + 20 - 9"
+    ],
+    correctIndex: 0
+  },
+  /* 123 */
+  {
+    questionLatex: "2(2x - 4) - 3(2x - 5)",
+    choicesLatex: [
+      "-2x + 7", // correct
+      "-2x - 7",
+      "2x + 7",
+      "-10x + 7"
+    ],
+    correctIndex: 0
+  },
+  /* 124 */
+  {
+    questionLatex: "4(-3x + y) - 2(2x + 3y) + 5x - 2y",
+    choicesLatex: [
+      "-11x - 4y", // correct
+      "-11x + 4y",
+      "-16x - 4y",
+      "-12x - 2y"
+    ],
+    correctIndex: 0
+  },
+  /* 125 */
+  {
+    questionLatex: "2(x + 1) + (4x - 1) - 5(x - 2)",
+    choicesLatex: [
+      "x + 11", // correct
+      "-x + 11",
+      "11x + 1",
+      "-4x + 11"
+    ],
+    correctIndex: 0
+  }
+];
+
+/* 상태 변수 */
+let currentIndex = 0;     // 현재 문제 인덱스
+let currentScore = 0;     // 점수
+let lives = 3;            // 남은 기회
+let totalElapsedTime = 0; // 게임 시작 후 경과 시간(초)
+let startTime = null;     // 전체 타이머 측정용
+let energyInterval = null;
+let totalTimeInterval = null;
+let gameInProgress = false;
+let currentTimeLimit = null; // 난이도별 문제 제한시간(초)
+
+/* 게임 시작 함수 */
+function startGame(difficulty){
+  currentIndex = 0;
+  currentScore = 0;
+  lives = 3;
+  totalElapsedTime = 0;
+
+  document.getElementById("difficultyContainer").style.display = "none";
+  document.getElementById("gameContainer").style.display = "block";
+
+  document.getElementById("scoreDisplay").innerText = "점수: 0";
+  document.getElementById("livesDisplay").innerText = "남은 기회: 3";
+
+  currentTimeLimit = timeLimitConfig[difficulty];
+
+  // 전체 경과시간 타이머 시작
+  startTime = Date.now();
+  totalTimeInterval = setInterval(() => {
+    totalElapsedTime = Math.floor((Date.now() - startTime)/1000);
+    document.getElementById("timeDisplay").innerText = "총 경과: " + totalElapsedTime + "초";
+  }, 1000);
+
+  gameInProgress = true;
+  
+  shuffleArray(quizData); // 문제 순서 섞기
+  showQuestion(difficulty);
+}
+
+/* 문제 표시 함수 */
+function showQuestion(difficulty){
+  if(!gameInProgress) return;
+
+  // 모든 문제를 한 바퀴 다 풀면 계속 재출제
+  if(currentIndex >= quizData.length){
+    currentIndex = 0;
+    shuffleArray(quizData);
+  }
+
+  let qObj = quizData[currentIndex];
+  
+  // HTML 렌더링
+  let questionContainer = document.getElementById("questionContainer");
+  questionContainer.innerHTML = `
+    <div class="question-block">
+      <div>\\(${qObj.questionLatex}\\)</div>
+      <div class="choices" id="choicesContainer"></div>
+    </div>
+  `;
+
+  // 보기 4개 무작위 출력
+  let indices = [0,1,2,3];
+  shuffleArray(indices);
+  let choicesHTML = "";
+  indices.forEach(i => {
+    const latexChoice = qObj.choicesLatex[i];
+    choicesHTML += `
+      <button class="choice-btn" 
+        onclick="checkAnswer(${i}, ${qObj.correctIndex}, '${difficulty}')">
+        \\(${latexChoice}\\)
+      </button>
+    `;
+  });
+  document.getElementById("choicesContainer").innerHTML = choicesHTML;
+
+  // MathJax 렌더
+  MathJax.typeset();
+
+  // 에너지바 초기화
+  clearInterval(energyInterval);
+  let energyBar = document.getElementById("energyBar");
+  let energyFill = document.getElementById("energyFill");
+
+  if(currentTimeLimit !== null){ 
+    // 제한시간 있음
+    energyBar.classList.remove("hidden");
+    let timeLeft = currentTimeLimit;
+    energyInterval = setInterval(()=>{
+      timeLeft -= 0.2;
+      if(timeLeft <= 0){
+        clearInterval(energyInterval);
+        // 시간 만료 -> 기회 1 감소
+        lives--;
+        updateLivesUI();
+        if(lives <= 0){
+          gameOver();
+          return;
+        }
+        currentIndex++;
+        showQuestion(difficulty);
+      } else {
+        let widthPercent = (timeLeft / currentTimeLimit) * 100;
+        energyFill.style.width = widthPercent + "%";
+      }
+    }, 200);
+  } else {
+    // 하(시간 무제한)
+    energyBar.classList.add("hidden");
+  }
+}
+
+/* 정답 확인 */
+function checkAnswer(chosenIndex, correctIndex, difficulty){
+  clearInterval(energyInterval);
+
+  if(chosenIndex === correctIndex){
+    // 정답
+    currentScore += scoreConfig[difficulty];
+    document.getElementById("scoreDisplay").innerText = "점수: " + currentScore;
+  } else {
+    // 오답
+    alert("틀렸습니다! 정답: " + quizData[currentIndex].choicesLatex[correctIndex]);
+    lives--;
+    updateLivesUI();
+    if(lives <= 0){
+      gameOver();
+      return;
+    }
+  }
+  currentIndex++;
+  showQuestion(difficulty);
+}
+
+function updateLivesUI(){
+  document.getElementById("livesDisplay").innerText = "남은 기회: " + lives;
+}
+
+function gameOver(){
+  gameInProgress = false;
+  clearInterval(energyInterval);
+  clearInterval(totalTimeInterval);
+  alert("게임 오버! 최종 점수: " + currentScore);
+  // 원한다면 여기서 재시작 등을 처리 가능
+}
+
+/* 배열 셔플 */
+function shuffleArray(arr){
+  for(let i = arr.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i+1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
+// 시작 시 문제 배열 섞어두기
+shuffleArray(quizData);
+</script>
+
+</body>
+</html>
